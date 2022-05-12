@@ -12264,25 +12264,99 @@ func TestCreditCardFormatValidation(t *testing.T) {
 }
 
 func TestMultiOrOperatorGroup(t *testing.T) {
- 	tests := []struct {
- 		Value    int `validate:"eq=1|gte=5,eq=1|lt=7"`
- 		expected bool
- 	}{
- 		{1, true}, {2, false}, {5, true}, {6, true}, {8, false},
- 	}
+	tests := []struct {
+		Value    int `validate:"eq=1|gte=5,eq=1|lt=7"`
+		expected bool
+	}{
+		{1, true}, {2, false}, {5, true}, {6, true}, {8, false},
+	}
 
- 	validate := New()
+	validate := New()
 
- 	for i, test := range tests {
- 		errs := validate.Struct(test)
- 		if test.expected {
- 			if !IsEqual(errs, nil) {
- 				t.Fatalf("Index: %d multi_group_of_OR_operators failed Error: %s", i, errs)
- 			}
- 		} else {
- 			if IsEqual(errs, nil) {
- 				t.Fatalf("Index: %d multi_group_of_OR_operators should have errs", i)
- 			}
- 		}
- 	}
- }
+	for i, test := range tests {
+		errs := validate.Struct(test)
+		if test.expected {
+			if !IsEqual(errs, nil) {
+				t.Fatalf("Index: %d multi_group_of_OR_operators failed Error: %s", i, errs)
+			}
+		} else {
+			if IsEqual(errs, nil) {
+				t.Fatalf("Index: %d multi_group_of_OR_operators should have errs", i)
+			}
+		}
+	}
+}
+
+func TestValidateField(t *testing.T) {
+	type Inner struct {
+		Time *time.Time `json:"time of inner"`
+		Int  int        `json:"int of inner"`
+	}
+
+	type Test struct {
+		Inner   *Inner
+		Time    *time.Time `validate:"eqcsfield=Inner.Time" json:"time"`
+		Int     int        `validate:"gtcsfield=Inner.Int" json:"int"`
+		String1 string     `json:"string1"`
+		String2 string     `validate:"gtfield=String1"`
+		String3 string     `validate:"eqfield=String2"`
+	}
+
+	now := time.Now().UTC()
+	then := now.Add(time.Hour * 1)
+
+	in := &Inner{
+		Time: &now,
+		Int:  1,
+	}
+
+	ts := &Test{
+		Inner:   in,
+		Time:    &now,
+		Int:     2,
+		String1: "a",
+		String2: "ab",
+		String3: "ab",
+	}
+
+	validate := New()
+	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+
+		if name == "-" {
+			return ""
+		}
+
+		return name
+	})
+
+	errs := validate.Struct(ts)
+	Equal(t, errs, nil)
+
+	ts.Time = &then
+	ts.Int = 1
+	ts.String2 = "a"
+	ts.String3 = "ab"
+
+	errs = validate.Struct(ts)
+	NotEqual(t, errs, nil)
+
+	ve := errs.(ValidationErrors)
+	Equal(t, len(ve), 4)
+
+	for _, e := range ve {
+		switch e.StructField() {
+		case "Time":
+			Equal(t, e.ValidateField(), "time of inner")
+
+		case "Int":
+			Equal(t, e.ValidateField(), "int of inner")
+
+		case "String2":
+			Equal(t, e.ValidateField(), "string1")
+
+		case "String3":
+			Equal(t, e.ValidateField(), "String2")
+		}
+	}
+}

@@ -59,7 +59,8 @@ BEGIN:
 // NOTE: when not successful ok will be false, this can happen when a nested struct is nil and so the field
 // could not be retrieved because it didn't exist.
 func (v *validate) getStructFieldOKInternal(val reflect.Value, namespace string) (current reflect.Value, kind reflect.Kind, nullable bool, found bool) {
-
+	var prevVal reflect.Value
+	var prevNamespace string
 BEGIN:
 	current, kind, nullable = v.ExtractType(val)
 	if kind == reflect.Invalid {
@@ -68,6 +69,27 @@ BEGIN:
 
 	if namespace == "" {
 		found = true
+
+		if v.v.hasTagNameFunc {
+			actualPreVal, actualPreKind, _ := v.ExtractType(prevVal)
+			if actualPreKind == reflect.Invalid {
+				return
+			}
+
+			actualPreType := actualPreVal.Type()
+
+			cs, ok := v.v.structCache.Get(actualPreType)
+			if !ok {
+				cs = v.v.extractStructCache(actualPreVal, actualPreType.Name())
+			}
+
+			for _, field := range cs.fields {
+				if field.name == prevNamespace {
+					v.ct.validateField = field.altName
+					break
+				}
+			}
+		}
 		return
 	}
 
@@ -99,6 +121,9 @@ BEGIN:
 
 				ns = namespace[bracketIdx:]
 			}
+
+			prevVal = val
+			prevNamespace = namespace
 
 			val = current.FieldByName(fld)
 			namespace = ns

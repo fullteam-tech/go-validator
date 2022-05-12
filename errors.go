@@ -158,6 +158,10 @@ type FieldError interface {
 
 	// Error returns the FieldError's message
 	Error() string
+	// returns the param field name with the tag name taking precedence over the
+	// field actual name and this will also help with generating an error message.
+	// If the field doesn't set the tag, it returns the field name from struct.
+	ValidateField() string
 }
 
 // compile time interface checks
@@ -177,6 +181,7 @@ type fieldError struct {
 	structfieldLen uint8
 	value          interface{}
 	param          string
+	validateField  string
 	kind           reflect.Kind
 	typ            reflect.Type
 }
@@ -272,4 +277,11 @@ func (fe *fieldError) Translate(ut ut.Translator) string {
 	}
 
 	return fn(ut, fe)
+}
+
+func (fe *fieldError) ValidateField() string {
+	if fe.validateField == "" {
+		return fe.param
+	}
+	return fe.validateField
 }

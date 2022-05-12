@@ -87,6 +87,7 @@ type cTag struct {
 	aliasTag             string
 	actualAliasTag       string
 	param                string
+	validateField        string
 	keys                 *cTag // only populated when using tag's 'keys' and 'endkeys' for map key validation
 	next                 *cTag
 	fn                   FuncCtx
@@ -120,7 +121,7 @@ func (v *Validate) extractStructCache(current reflect.Value, sName string) *cStr
 	var fld reflect.StructField
 	var tag string
 	var customName string
-	
+
 	for i := 0; i < numFields; i++ {
 
 		fld = typ.Field(i)
